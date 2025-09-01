@@ -95,8 +95,8 @@
 <div align="center">
 <br>
 
-<img height=150 align="center" src="https://gh-stats-xi.vercel.app/api?username=dusk-dusts&count_private=true&include_all_commits=true&theme=gotham&hide_rank=true" />
-<img height=200 align="center" src="https://gh-stats-xi.vercel.app/api/top-langs?username=dusk-dusts&layout=compact&langs_count=8&card_width=320&count_private=true&theme=gotham" />
+<img height=200 align="center" src="https://gh-stats-xi.vercel.app/api?username=dusk-dusts&count_private=true&include_all_commits=true&theme=midnight-purple&hide_rank=true" />
+<img height=200 align="center" src="https://gh-stats-xi.vercel.app/api/top-langs?username=dusk-dusts&layout=compact&langs_count=8&card_width=320&count_private=true&theme=midnight-purple" />
 
 <h2></h2>
 <!-- <br><br>
@@ -106,7 +106,7 @@
  -->
 <br><br>
 
-<img src="https://ghactgrapprv.vercel.app/graph?username=dusk-dusts&radius=16&theme=gotham&area=true&order=5" height="200" alt="activity-graph graph"  />
+<img src="https://gh-graph-taupe.vercel.app/graph?username=dusk-dusts&radius=16&theme=high-contrast&area=true&order=5" height="250" alt="activity-graph graph"  />
 <br><br>
 </div>
 
