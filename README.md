@@ -16,10 +16,10 @@
 	<p align="center"><b><samp>Find me~</samp></b></p>
 	<br>
 	<div align="center">
-	  <a href="https://discord.com/users/1014901022042357932" target="_blank">
+	  <a href="https://discord.com/users/1132966956107038792" target="_blank">
 	    <img src="https://img.shields.io/static/v1?message=Discord&logo=discord&label=&color=7289DA&logoColor=white&labelColor=&style=for-the-badge" height="40" alt="discord logo"  />
 	  </a>
-	  <a href="mailto:kiyo@kiyo.codes" target="_blank">
+	  <a href="mailto:duskdusts.dev@proton.me" target="_blank">
 	    <img src="https://img.shields.io/static/v1?message=Email&logo=gmail&label=&color=D14836&logoColor=white&labelColor=&style=for-the-badge" height="40" alt="gmail logo"  />
 	  </a>
 	  <a href="https://x.com/kaze_noki" target="_blank">
@@ -120,6 +120,6 @@
 
 <br>
 
-<a href="https://discord.com/users/1135128375225225256"><img align="center" width=400 src="https://moe-counter.glitch.me/get/@dusk-dusts?theme=rule34"></a>
+<a href="https://discord.com/users/1132966956107038792"><img align="center" width=400 src="https://moe-counter.glitch.me/get/@dusk-dusts?theme=rule34"></a>
 <a href="https://github.com/dusk-dusts"></a>
 </div>
