@@ -95,8 +95,8 @@
 <div align="center">
 <br>
 
-<img height=200 align="center" src="https://github-readme-stats-gamma-vert-43.vercel.app/api?username=dusk-dusts&count_private=true&include_all_commits=true&theme=gotham&hide_rank=true" />
-<img height=200 align="center" src="https://github-readme-stats-gamma-vert-43.vercel.app/api/top-langs?username=dusk-dusts&layout=compact&langs_count=8&card_width=320&count_private=true&theme=gotham" />
+<img height=200 align="center" src="https://gh-stats-xi.vercel.app/api?username=dusk-dusts&count_private=true&include_all_commits=true&theme=gotham&hide_rank=true" />
+<img height=200 align="center" src="https://gh-stats-xi.vercel.app/api/top-langs?username=dusk-dusts&layout=compact&langs_count=8&card_width=320&count_private=true&theme=gotham" />
 
 <h2></h2>
 <!-- <br><br>
