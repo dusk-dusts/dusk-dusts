@@ -2,7 +2,7 @@
 <h1 align="center"><samp>An idiot admires complexity, while a genius admires simplicity - Terry Davis</samp></h1>
 
 ```sh
-~/fedora-btw: fetch.sh
+~/fedora-btw: cowsay "i also go by kiyo/kiyopon"
 ```
 
 <img align="left" src="https://github.com/dusk-dusts.png" width="411.5" />
