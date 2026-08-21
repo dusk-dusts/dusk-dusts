@@ -5,7 +5,7 @@
 ~/fedora-btw: cowsay "i also go by kiyo/kiyopon"
 ```
 
-<img align="left" src="https://github.com/dusk-dusts.png" width="411.5" />
+<img align="left" src="https://github.com/dusk-dusts.png" width="505" />
 
 ```haskell
 dusk-dusts@github
