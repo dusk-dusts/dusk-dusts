@@ -21,8 +21,8 @@ status    • open to work /
 hobbies   • gaming, coding, ricing,
             playing chess/osu, g̶o̶o̶n̶i̶n̶g̶
 
-skills    • python, discord.py, flask, pytorch, sklearn,
-			numpy, pandas, javascript, react.js, gsap,
+skills    • python[discord.py, flask, pytorch, sklearn,
+			numpy, pandas], javascript[react.js, gsap]
 			c#, bash, lua
 
 learning  • rust, c, c++
