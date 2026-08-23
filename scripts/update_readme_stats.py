@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Update the small stats block in README.md:
+Update the stats block in README.md to show:
   repos     • X
-  commits   • X
+  contributions     • X
   issues    • X
   stars     • X
 
-Uses GitHub GraphQL. Provide token via GH_TOKEN (preferred) or GITHUB_TOKEN.
+Removes any existing 'commits' line. Uses GH_TOKEN (preferred) or GITHUB_TOKEN.
 Set USERNAME to explicitly target a username; otherwise the workflow will set it.
 """
 import os
@@ -17,7 +17,6 @@ import requests
 
 API = "https://api.github.com/graphql"
 
-# GraphQL query: repositories + contributionsCollection
 REPO_NODE_FIELDS = """
   name
   isPrivate
@@ -39,9 +38,9 @@ query($login: String!, $after: String) {
       }
     }
     contributionsCollection {
-      totalCommitContributions
-      totalRepositoryContributions
-      totalPullRequestContributions
+      contributionCalendar {
+        totalContributions
+      }
       totalIssueContributions
     }
   }
@@ -86,12 +85,16 @@ def collect_repos(token, login):
 def compute_stats(user, repos, total_count):
     total_repos = total_count if total_count is not None else len(repos)
     total_stars = sum((r.get("stargazerCount") or 0) for r in repos)
-    contributions = user.get("contributionsCollection", {})
-    commits_year = contributions.get("totalCommitContributions", 0)
-    issues_year = contributions.get("totalIssueContributions", 0)
+    contributions_total = 0
+    contributions_coll = user.get("contributionsCollection", {})
+    if contributions_coll:
+        cal = contributions_coll.get("contributionCalendar")
+        if cal:
+            contributions_total = cal.get("totalContributions", 0)
+    issues_year = contributions_coll.get("totalIssueContributions", 0)
     return {
         "repos": total_repos,
-        "commits": commits_year,
+        "contributions": contributions_total,
         "issues": issues_year,
         "stars": total_stars,
     }
@@ -100,42 +103,37 @@ def update_readme_file(path, stats):
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
 
-    # Regex matches the first block with the four lines, allowing spacing variation.
-    pattern = re.compile(
-        r"^(?P<prefix>.*?)(?P<section>"
-        r"repos\s*[\u2022•]\s*\d+\s*\n"
-        r"commits\s*[\u2022•]\s*\d+\s*\n"
-        r"issues\s*[\u2022•]\s*\d+\s*\n"
-        r"stars\s*[\u2022•]\s*\d+\s*\n)"
-        , re.IGNORECASE | re.DOTALL | re.MULTILINE)
+    # Find repo line to anchor insertion
+    repo_pat = re.compile(r"(^.*?repos\s*[\u2022•]\s*\d+.*?$)", re.IGNORECASE | re.MULTILINE)
+    if not repo_pat.search(text):
+        raise SystemExit("Could not find 'repos' line to anchor updates in README.md")
 
-    # If pattern fails, attempt a more permissive single-line replacements
-    m = pattern.search(text)
-    if m:
-        section = m.group("section")
-        # Build replacement with same line endings
-        repl_lines = [
-            f"repos     • {stats['repos']}\n",
-            f"commits   • {stats['commits']}\n",
-            f"issues    • {stats['issues']}\n",
-            f"stars     • {stats['stars']}\n",
-        ]
-        new_section = "".join(repl_lines)
-        new_text = text[:m.start("section")] + new_section + text[m.end("section"):]
-    else:
-        # Fallback: replace each line individually (first occurrence)
-        new_text = text
-        replacements = [
-            (r"repos\s*[\u2022•]\s*\d+", f"repos     • {stats['repos']}"),
-            (r"commits\s*[\u2022•]\s*\d+", f"commits   • {stats['commits']}"),
-            (r"issues\s*[\u2022•]\s*\d+", f"issues    • {stats['issues']}"),
-            (r"stars\s*[\u2022•]\s*\d+", f"stars     • {stats['stars']}"),
-        ]
-        for pat, rep in replacements:
-            new_text, n = re.subn(pat, rep, new_text, count=1, flags=re.IGNORECASE)
-        if new_text == text:
-            raise SystemExit("Could not find stats block in README.md to update")
+    # Remove existing 'commits' line(s)
+    commits_line_pat = re.compile(r"^\s*commits\s*[\u2022•]\s*\d+\s*$\n?", re.IGNORECASE | re.MULTILINE)
+    text = commits_line_pat.sub("", text)
 
+    # Insert contributions line if missing (after the first repos line)
+    contributions_pat = re.compile(r"contributions\s*[\u2022•]\s*\d+", re.IGNORECASE)
+    if not contributions_pat.search(text):
+        # Insert after the first repos line (preserve same indentation/spaces)
+        def insert_after_repo(match):
+            repo_line = match.group(1)
+            return repo_line + "\ncontributions     • %d" % stats["contributions"]
+        text = repo_pat.sub(insert_after_repo, text, count=1)
+
+    # Replace/update the four lines (repos, contributions, issues, stars) - first occurrence
+    replacements = [
+        (r"repos\s*[\u2022•]\s*\d+", f"repos     • {stats['repos']}"),
+        (r"contributions\s*[\u2022•]\s*\d+", f"contributions     • {stats['contributions']}"),
+        (r"issues\s*[\u2022•]\s*\d+", f"issues    • {stats['issues']}"),
+        (r"stars\s*[\u2022•]\s*\d+", f"stars     • {stats['stars']}"),
+    ]
+
+    new_text = text
+    for pat, rep in replacements:
+        new_text, n = re.subn(pat, rep, new_text, count=1, flags=re.IGNORECASE)
+    if new_text == text:
+        raise SystemExit("Could not find/update stats lines in README.md")
     if new_text != text:
         with open(path, "w", encoding="utf-8") as f:
             f.write(new_text)
