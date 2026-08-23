@@ -2,11 +2,12 @@
 """
 Update the stats block in README.md to show:
   repos     • X
-  contribs     • X
+  commits   • X
   issues    • X
   stars     • X
 
-Removes any existing 'commits' line. Uses GH_TOKEN (preferred) or GITHUB_TOKEN.
+Label dots are aligned in one column for clean layout.
+Uses GH_TOKEN (preferred) or GITHUB_TOKEN.
 Set USERNAME to explicitly target a username; otherwise the workflow will set it.
 """
 import os
@@ -47,6 +48,9 @@ query($login: String!, $after: String) {
 
 MARKER_START = "<!-- STATS START -->"
 MARKER_END = "<!-- STATS END -->"
+
+# width used to align the "•" column
+LABEL_WIDTH = 10  # adjust if you want different spacing
 
 def get_token():
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
@@ -95,18 +99,23 @@ def compute_stats(user, repos, total_count):
     issues_year = contributions_coll.get("totalIssueContributions", 0)
     return {
         "repos": total_repos,
-        "contribs": contributions_total,
+        "commits": contributions_total,   # we treat "commits" as the profile-style total contributions per your request
         "issues": issues_year,
         "stars": total_stars,
     }
 
+def fmt_label(label):
+    # left-align label in LABEL_WIDTH and add single space before bullet for readability
+    return f"{label:<{LABEL_WIDTH}} •"
+
 def build_stats_block(stats):
+    # Using label "commits" as requested (shows total contributions from calendar)
     lines = [
         MARKER_START,
-        f"repos     • {stats['repos']}",
-        f"contribs     • {stats['contribs']}",
-        f"issues    • {stats['issues']}",
-        f"stars     • {stats['stars']}",
+        f"{fmt_label('repos')} {stats['repos']}",
+        f"{fmt_label('commits')} {stats['commits']}",
+        f"{fmt_label('issues')} {stats['issues']}",
+        f"{fmt_label('stars')} {stats['stars']}",
         MARKER_END,
     ]
     return "\n".join(lines) + "\n"
@@ -120,32 +129,37 @@ def update_readme_with_markers(text, stats):
     return text, False
 
 def fallback_update(text, stats):
-    # Remove any 'commits' line
-    commits_line_pat = re.compile(r"^\s*commits\s*[\u2022•]\s*\d+\s*$\n?", re.IGNORECASE | re.MULTILINE)
-    text = commits_line_pat.sub("", text)
+    # Remove any old 'commits'/'contribs'/'contributions' line(s)
+    old_line_pat = re.compile(r"^\s*(commits|contribs|contributions)\s*[\u2022•]\s*\d+\s*$\n?", re.IGNORECASE | re.MULTILINE)
+    text = old_line_pat.sub("", text)
 
-    # Try to insert contribs (or contributions) after repos line if missing
+    # Try to find a 'repos' line to anchor insertion
     repo_pat = re.compile(r"(^.*?repos\s*[\u2022•]\s*\d+.*?$)", re.IGNORECASE | re.MULTILINE)
-    contribs_existing_pat = re.compile(r"(contribs|contributions)\s*[\u2022•]\s*\d+", re.IGNORECASE)
-    if repo_pat.search(text) and not contribs_existing_pat.search(text):
+    if repo_pat.search(text):
+        # Insert the block after the first repos line
         def insert_after_repo(match):
             repo_line = match.group(1)
-            return repo_line + "\ncontribs     • %d" % stats["contribs"]
-        text = repo_pat.sub(insert_after_repo, text, count=1)
+            # Build a small block (no markers) using the same formatting
+            insert_lines = [
+                repo_line,
+                f"{fmt_label('commits')} {stats['commits']}",
+                f"{fmt_label('issues')} {stats['issues']}",
+                f"{fmt_label('stars')} {stats['stars']}",
+            ]
+            return "\n".join(insert_lines)
+        new_text = repo_pat.sub(insert_after_repo, text, count=1)
+        changed = new_text != text
+        return new_text, changed
 
-    # Replace/update the lines (first occurrence). Accept both old and new labels for matching,
-    # but write the "contribs" label.
-    replacements = [
-        (r"repos\s*[\u2022•]\s*\d+", f"repos     • {stats['repos']}"),
-        (r"(contribs|contributions)\s*[\u2022•]\s*\d+", f"contribs     • {stats['contribs']}"),
-        (r"issues\s*[\u2022•]\s*\d+", f"issues    • {stats['issues']}"),
-        (r"stars\s*[\u2022•]\s*\d+", f"stars     • {stats['stars']}"),
-    ]
-    new_text = text
-    for pat, rep in replacements:
-        new_text, n = re.subn(pat, rep, new_text, count=1, flags=re.IGNORECASE)
-    changed = new_text != text
-    return new_text, changed
+    # If no repos line, try to insert the full marker block after the first heading (# or <h1)
+    heading_pat = re.compile(r"(^# .*$|^<h1.*?>.*?</h1>\s*$)", re.IGNORECASE | re.MULTILINE)
+    if heading_pat.search(text):
+        block = build_stats_block(stats)
+        new_text = heading_pat.sub(lambda m: m.group(0) + "\n\n" + block, text, count=1)
+        return new_text, True
+
+    # Nothing matched: return original text (no change) and let caller know
+    return text, False
 
 def update_readme_file(path, stats):
     with open(path, "r", encoding="utf-8") as f:
@@ -158,7 +172,7 @@ def update_readme_file(path, stats):
             f.write(new_text)
         return True
 
-    # 2) Fallback to regex-based replacement (legacy)
+    # 2) Fallback to inserting after repos line or first heading
     new_text, changed = fallback_update(text, stats)
     if changed:
         with open(path, "w", encoding="utf-8") as f:
