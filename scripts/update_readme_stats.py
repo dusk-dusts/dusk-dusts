@@ -2,7 +2,7 @@
 """
 Update the stats block in README.md to show:
   repos     • X
-  contributions     • X
+  contribs     • X
   issues    • X
   stars     • X
 
@@ -38,14 +38,15 @@ query($login: String!, $after: String) {
       }
     }
     contributionsCollection {
-      contributionCalendar {
-        totalContributions
-      }
+      contributionCalendar { totalContributions }
       totalIssueContributions
     }
   }
 }
 """ % REPO_NODE_FIELDS
+
+MARKER_START = "<!-- STATS START -->"
+MARKER_END = "<!-- STATS END -->"
 
 def get_token():
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
@@ -94,50 +95,80 @@ def compute_stats(user, repos, total_count):
     issues_year = contributions_coll.get("totalIssueContributions", 0)
     return {
         "repos": total_repos,
-        "contributions": contributions_total,
+        "contribs": contributions_total,
         "issues": issues_year,
         "stars": total_stars,
     }
+
+def build_stats_block(stats):
+    lines = [
+        MARKER_START,
+        f"repos     • {stats['repos']}",
+        f"contribs     • {stats['contribs']}",
+        f"issues    • {stats['issues']}",
+        f"stars     • {stats['stars']}",
+        MARKER_END,
+    ]
+    return "\n".join(lines) + "\n"
+
+def update_readme_with_markers(text, stats):
+    block = build_stats_block(stats)
+    marker_regex = re.compile(re.escape(MARKER_START) + r".*?" + re.escape(MARKER_END), re.DOTALL)
+    if marker_regex.search(text):
+        new_text = marker_regex.sub(block.strip() + "\n", text, count=1)
+        return new_text, True
+    return text, False
+
+def fallback_update(text, stats):
+    # Remove any 'commits' line
+    commits_line_pat = re.compile(r"^\s*commits\s*[\u2022•]\s*\d+\s*$\n?", re.IGNORECASE | re.MULTILINE)
+    text = commits_line_pat.sub("", text)
+
+    # Try to insert contribs (or contributions) after repos line if missing
+    repo_pat = re.compile(r"(^.*?repos\s*[\u2022•]\s*\d+.*?$)", re.IGNORECASE | re.MULTILINE)
+    contribs_existing_pat = re.compile(r"(contribs|contributions)\s*[\u2022•]\s*\d+", re.IGNORECASE)
+    if repo_pat.search(text) and not contribs_existing_pat.search(text):
+        def insert_after_repo(match):
+            repo_line = match.group(1)
+            return repo_line + "\ncontribs     • %d" % stats["contribs"]
+        text = repo_pat.sub(insert_after_repo, text, count=1)
+
+    # Replace/update the lines (first occurrence). Accept both old and new labels for matching,
+    # but write the "contribs" label.
+    replacements = [
+        (r"repos\s*[\u2022•]\s*\d+", f"repos     • {stats['repos']}"),
+        (r"(contribs|contributions)\s*[\u2022•]\s*\d+", f"contribs     • {stats['contribs']}"),
+        (r"issues\s*[\u2022•]\s*\d+", f"issues    • {stats['issues']}"),
+        (r"stars\s*[\u2022•]\s*\d+", f"stars     • {stats['stars']}"),
+    ]
+    new_text = text
+    for pat, rep in replacements:
+        new_text, n = re.subn(pat, rep, new_text, count=1, flags=re.IGNORECASE)
+    changed = new_text != text
+    return new_text, changed
 
 def update_readme_file(path, stats):
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
 
-    # Find repo line to anchor insertion
-    repo_pat = re.compile(r"(^.*?repos\s*[\u2022•]\s*\d+.*?$)", re.IGNORECASE | re.MULTILINE)
-    if not repo_pat.search(text):
-        raise SystemExit("Could not find 'repos' line to anchor updates in README.md")
-
-    # Remove existing 'commits' line(s)
-    commits_line_pat = re.compile(r"^\s*commits\s*[\u2022•]\s*\d+\s*$\n?", re.IGNORECASE | re.MULTILINE)
-    text = commits_line_pat.sub("", text)
-
-    # Insert contributions line if missing (after the first repos line)
-    contributions_pat = re.compile(r"contributions\s*[\u2022•]\s*\d+", re.IGNORECASE)
-    if not contributions_pat.search(text):
-        # Insert after the first repos line (preserve same indentation/spaces)
-        def insert_after_repo(match):
-            repo_line = match.group(1)
-            return repo_line + "\ncontributions     • %d" % stats["contributions"]
-        text = repo_pat.sub(insert_after_repo, text, count=1)
-
-    # Replace/update the four lines (repos, contributions, issues, stars) - first occurrence
-    replacements = [
-        (r"repos\s*[\u2022•]\s*\d+", f"repos     • {stats['repos']}"),
-        (r"contributions\s*[\u2022•]\s*\d+", f"contributions     • {stats['contributions']}"),
-        (r"issues\s*[\u2022•]\s*\d+", f"issues    • {stats['issues']}"),
-        (r"stars\s*[\u2022•]\s*\d+", f"stars     • {stats['stars']}"),
-    ]
-
-    new_text = text
-    for pat, rep in replacements:
-        new_text, n = re.subn(pat, rep, new_text, count=1, flags=re.IGNORECASE)
-    if new_text == text:
-        raise SystemExit("Could not find/update stats lines in README.md")
-    if new_text != text:
+    # 1) Prefer marker replacement
+    new_text, changed = update_readme_with_markers(text, stats)
+    if changed:
         with open(path, "w", encoding="utf-8") as f:
             f.write(new_text)
         return True
+
+    # 2) Fallback to regex-based replacement (legacy)
+    new_text, changed = fallback_update(text, stats)
+    if changed:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new_text)
+        return True
+
+    # 3) Nothing matched: tell the user exactly what to paste
+    print("Could not find target area in README.md to update.", file=sys.stderr)
+    print("Add the following block somewhere appropriate in your README (then re-run):\n")
+    print(build_stats_block(stats))
     return False
 
 def main():
@@ -162,8 +193,8 @@ def main():
         print(f"README.md updated with stats: {stats} (at {now})")
         sys.exit(0)
     else:
-        print(f"No changes needed (stats: {stats})")
-        sys.exit(0)
+        print("No update performed. See instructions above.", file=sys.stderr)
+        sys.exit(2)
 
 if __name__ == "__main__":
     main()
