@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-Update the stats block in README.md to show:
+Update the small stats block in README.md:
   repos     • X
-  commits   • X
+  commits   • X    # now shows profile-style total contributions (contributionCalendar.totalContributions)
   issues    • X
   stars     • X
 
-Label dots are aligned in one column for clean layout.
-Uses GH_TOKEN (preferred) or GITHUB_TOKEN.
+Uses GitHub GraphQL. Provide token via GH_TOKEN (preferred) or GITHUB_TOKEN.
 Set USERNAME to explicitly target a username; otherwise the workflow will set it.
 """
 import os
@@ -18,6 +17,7 @@ import requests
 
 API = "https://api.github.com/graphql"
 
+# GraphQL query: repositories + contributionsCollection (now includes contributionCalendar.totalContributions)
 REPO_NODE_FIELDS = """
   name
   isPrivate
@@ -40,17 +40,13 @@ query($login: String!, $after: String) {
     }
     contributionsCollection {
       contributionCalendar { totalContributions }
+      totalRepositoryContributions
+      totalPullRequestContributions
       totalIssueContributions
     }
   }
 }
 """ % REPO_NODE_FIELDS
-
-MARKER_START = "<!-- STATS START -->"
-MARKER_END = "<!-- STATS END -->"
-
-# width used to align the "•" column
-LABEL_WIDTH = 10  # adjust if you want different spacing
 
 def get_token():
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
@@ -90,99 +86,62 @@ def collect_repos(token, login):
 def compute_stats(user, repos, total_count):
     total_repos = total_count if total_count is not None else len(repos)
     total_stars = sum((r.get("stargazerCount") or 0) for r in repos)
-    contributions_total = 0
-    contributions_coll = user.get("contributionsCollection", {})
-    if contributions_coll:
-        cal = contributions_coll.get("contributionCalendar")
-        if cal:
-            contributions_total = cal.get("totalContributions", 0)
-    issues_year = contributions_coll.get("totalIssueContributions", 0)
+    contributions = user.get("contributionsCollection", {})
+    # Replace commit-only metric with the profile-style total contributions
+    contrib_calendar = contributions.get("contributionCalendar") or {}
+    commits_year = contrib_calendar.get("totalContributions", 0)
+    issues_year = contributions.get("totalIssueContributions", 0)
     return {
         "repos": total_repos,
-        "commits": contributions_total,   # we treat "commits" as the profile-style total contributions per your request
+        "commits": commits_year,  # now holds total contributions (profile number)
         "issues": issues_year,
         "stars": total_stars,
     }
-
-def fmt_label(label):
-    # left-align label in LABEL_WIDTH and add single space before bullet for readability
-    return f"{label:<{LABEL_WIDTH}} •"
-
-def build_stats_block(stats):
-    # Using label "commits" as requested (shows total contributions from calendar)
-    lines = [
-        MARKER_START,
-        f"{fmt_label('repos')} {stats['repos']}",
-        f"{fmt_label('commits')} {stats['commits']}",
-        f"{fmt_label('issues')} {stats['issues']}",
-        f"{fmt_label('stars')} {stats['stars']}",
-        MARKER_END,
-    ]
-    return "\n".join(lines) + "\n"
-
-def update_readme_with_markers(text, stats):
-    block = build_stats_block(stats)
-    marker_regex = re.compile(re.escape(MARKER_START) + r".*?" + re.escape(MARKER_END), re.DOTALL)
-    if marker_regex.search(text):
-        new_text = marker_regex.sub(block.strip() + "\n", text, count=1)
-        return new_text, True
-    return text, False
-
-def fallback_update(text, stats):
-    # Remove any old 'commits'/'contribs'/'contributions' line(s)
-    old_line_pat = re.compile(r"^\s*(commits|contribs|contributions)\s*[\u2022•]\s*\d+\s*$\n?", re.IGNORECASE | re.MULTILINE)
-    text = old_line_pat.sub("", text)
-
-    # Try to find a 'repos' line to anchor insertion
-    repo_pat = re.compile(r"(^.*?repos\s*[\u2022•]\s*\d+.*?$)", re.IGNORECASE | re.MULTILINE)
-    if repo_pat.search(text):
-        # Insert the block after the first repos line
-        def insert_after_repo(match):
-            repo_line = match.group(1)
-            # Build a small block (no markers) using the same formatting
-            insert_lines = [
-                repo_line,
-                f"{fmt_label('commits')} {stats['commits']}",
-                f"{fmt_label('issues')} {stats['issues']}",
-                f"{fmt_label('stars')} {stats['stars']}",
-            ]
-            return "\n".join(insert_lines)
-        new_text = repo_pat.sub(insert_after_repo, text, count=1)
-        changed = new_text != text
-        return new_text, changed
-
-    # If no repos line, try to insert the full marker block after the first heading (# or <h1)
-    heading_pat = re.compile(r"(^# .*$|^<h1.*?>.*?</h1>\s*$)", re.IGNORECASE | re.MULTILINE)
-    if heading_pat.search(text):
-        block = build_stats_block(stats)
-        new_text = heading_pat.sub(lambda m: m.group(0) + "\n\n" + block, text, count=1)
-        return new_text, True
-
-    # Nothing matched: return original text (no change) and let caller know
-    return text, False
 
 def update_readme_file(path, stats):
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
 
-    # 1) Prefer marker replacement
-    new_text, changed = update_readme_with_markers(text, stats)
-    if changed:
+    # Regex matches the first block with the four lines, allowing spacing variation.
+    pattern = re.compile(
+        r"^(?P<prefix>.*?)(?P<section>"
+        r"repos\s*[\u2022•]\s*\d+\s*\n"
+        r"commits\s*[\u2022•]\s*\d+\s*\n"
+        r"issues\s*[\u2022•]\s*\d+\s*\n"
+        r"stars\s*[\u2022•]\s*\d+\s*\n)"
+        , re.IGNORECASE | re.DOTALL | re.MULTILINE)
+
+    # If pattern fails, attempt a more permissive single-line replacements
+    m = pattern.search(text)
+    if m:
+        section = m.group("section")
+        # Build replacement with same line endings
+        repl_lines = [
+            f"repos     • {stats['repos']}\n",
+            f"commits   • {stats['commits']}\n",
+            f"issues    • {stats['issues']}\n",
+            f"stars     • {stats['stars']}\n",
+        ]
+        new_section = "".join(repl_lines)
+        new_text = text[:m.start("section")] + new_section + text[m.end("section"):]
+    else:
+        # Fallback: replace each line individually (first occurrence)
+        new_text = text
+        replacements = [
+            (r"repos\s*[\u2022•]\s*\d+", f"repos     • {stats['repos']}"),
+            (r"commits\s*[\u2022•]\s*\d+", f"commits   • {stats['commits']}"),
+            (r"issues\s*[\u2022•]\s*\d+", f"issues    • {stats['issues']}"),
+            (r"stars\s*[\u2022•]\s*\d+", f"stars     • {stats['stars']}"),
+        ]
+        for pat, rep in replacements:
+            new_text, n = re.subn(pat, rep, new_text, count=1, flags=re.IGNORECASE)
+        if new_text == text:
+            raise SystemExit("Could not find stats block in README.md to update")
+
+    if new_text != text:
         with open(path, "w", encoding="utf-8") as f:
             f.write(new_text)
         return True
-
-    # 2) Fallback to inserting after repos line or first heading
-    new_text, changed = fallback_update(text, stats)
-    if changed:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(new_text)
-        return True
-
-    # 3) Nothing matched: tell the user exactly what to paste
-    print("Could not find target area in README.md to update.", file=sys.stderr)
-    print("Add the following block somewhere appropriate in your README (then re-run):\n")
-    print(build_stats_block(stats))
     return False
 
 def main():
@@ -207,8 +166,8 @@ def main():
         print(f"README.md updated with stats: {stats} (at {now})")
         sys.exit(0)
     else:
-        print("No update performed. See instructions above.", file=sys.stderr)
-        sys.exit(2)
+        print(f"No changes needed (stats: {stats})")
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()
