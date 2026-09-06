@@ -28,8 +28,8 @@ skills    • python[discord.py, fastapi, flask,
 
 learning  • rust, c, c++
 
-repos     • 10
-commits   • 62
+repos     • 11
+commits   • 68
 issues    • 0
 stars     • 0
 ```
